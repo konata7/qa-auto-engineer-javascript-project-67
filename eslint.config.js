@@ -16,6 +16,7 @@ const compat = new FlatCompat({
 
 export default [
   {
+    ignores: ['__fixtures__/**'],
     languageOptions: {
       globals: {
         ...globals.node,

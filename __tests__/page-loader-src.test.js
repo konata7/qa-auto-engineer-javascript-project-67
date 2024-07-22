@@ -22,6 +22,7 @@ const filesFolder = path.join(getFixturePath('courses'), 'ru-hexlet-io-courses_f
 
 beforeAll(async () => {
   nock('https://ru.hexlet.io')
+    .persist()
     .get('/courses')
     .replyWithFile(200, path.join(getFixturePath('courses'), 'raw.html'))
     .get('/assets/professions/nodejs.png')

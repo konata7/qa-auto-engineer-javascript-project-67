@@ -6,6 +6,7 @@ import axios from 'axios';
 import * as fs from 'node:fs/promises';
 import path from 'path';
 import * as cheerio from 'cheerio';
+import _ from 'lodash';
 
 const makeFilename = (url, ext) => {
   const newExt = ext || path.extname(url);
@@ -15,35 +16,40 @@ const makeFilename = (url, ext) => {
 
 async function loadResources(loadedCheerio, url, outputDir, resourcesDirpath) {
   const { hostname } = new URL(url);
-  const $imgSrc = loadedCheerio('img').map(function fn() {
-    return loadedCheerio(this).attr('src');
-  });
-  const $linkHref = loadedCheerio('link').map(function fn() {
-    return loadedCheerio(this).attr('href');
-  });
 
-  const imgLinks = $imgSrc.toArray()
-    .map((src) => ({ url: new URL(src, url).href, src }));
-  const linkLinks = $linkHref.toArray()
-    .filter((link) => new URL(link).hostname === hostname)
-    .map((link) => ({ url: new URL(link, url).href, link }));
+  async function loadByTag(tag, linkAttr, filterByHostname) {
+    const $tagLinks = loadedCheerio(tag).map(function fn() {
+      return loadedCheerio(this).attr(linkAttr);
+    });
 
-  const promisesImgs = imgLinks.map((link) => axios.get(link.url));
-  const responseImgs = await Promise.allSettled(promisesImgs);
-  const imgs = responseImgs
-    .filter((el) => el.status === 'fulfilled')
-    .map((el) => ({
-      data: el.value.data,
-      url: el.value.config.url,
-      src: imgLinks.find((imgLink) => imgLink.url === el.value.config.url).src,
-      filename: makeFilename(el.value.config.url),
-      relativePath: path.relative(
-        outputDir,
-        path.join(resourcesDirpath, makeFilename(el.value.config.url)),
-      ),
-      absolutePath: path.join(resourcesDirpath, makeFilename(el.value.config.url)),
-    }));
-  return imgs;
+    const tagLinks = $tagLinks.toArray()
+      .filter((link) => !filterByHostname || !link.startsWith('http') || new URL(link).hostname === hostname)
+      .map((link) => ({ url: new URL(link, url).href, link }));
+    // eslint-disable-next-line no-unused-vars
+
+    const promises1 = tagLinks.map((link) => axios.get(link.url));
+    const response = await Promise.allSettled(promises1);
+
+    return response.filter((el) => el.status === 'fulfilled')
+      .map((el) => ({
+        data: el.value.data,
+        url: el.value.config.url,
+        type: tag,
+        linkAttr,
+        src: tagLinks.find((link) => link.url === el.value.config.url).link,
+        filename: makeFilename(el.value.config.url, el.value.config.url.split('/').at(-1).split('.').length === 1 ? '.html' : undefined),
+        relativePath: path.relative(
+          outputDir,
+          path.join(resourcesDirpath, makeFilename(el.value.config.url, el.value.config.url.split('/').at(-1).split('.').length === 1 ? '.html' : undefined)),
+        ),
+        absolutePath: path.join(resourcesDirpath, makeFilename(el.value.config.url, el.value.config.url.split('/').at(-1).split('.').length === 1 ? '.html' : undefined)),
+      }));
+  }
+  const img = await loadByTag('img', 'src', false);
+  const link = await loadByTag('link', 'href', true);
+  const script = await loadByTag('script', 'src', true);
+
+  return [...img, ...link, ...script];
 }
 
 /**
@@ -59,16 +65,22 @@ export default async (url, outputDir = process.cwd()) => {
 
   const resourcesDirpath = path.join(outputDir, makeFilename(url, '_files'));
 
-  const imgs = await loadResources($, url, outputDir, resourcesDirpath);
+  const resources = await loadResources($, url, outputDir, resourcesDirpath);
 
   await fs.mkdir(resourcesDirpath);
-  const promisesWriteImgs = imgs
-    .map((img) => fs.writeFile(img.absolutePath, img.data));
-  await Promise.allSettled(promisesWriteImgs);
+  const promises = resources
+    .map((res) => fs.writeFile(res.absolutePath, res.data));
+  await Promise.allSettled(promises);
 
-  $('img').each(function fn() {
-    $(this).attr('src', imgs.find((img) => img.src === $(this).attr('src')).relativePath);
+  const uniqTags = _.uniq(resources.map((el) => el.type));
+  uniqTags.forEach((tag) => {
+    resources.filter((res) => res.type === tag).forEach((res) => {
+      $(`${res.type}[${res.linkAttr}=${res.src}]`).each(function fn() {
+        $(this).attr(res.linkAttr, res.relativePath);
+      });
+    });
   });
+
   const newHtml = $.html();
   await fs.writeFile(filepath, newHtml);
   return { filepath };

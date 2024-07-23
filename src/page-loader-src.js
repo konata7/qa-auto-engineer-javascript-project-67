@@ -2,11 +2,19 @@
 
 // import _ from 'lodash';
 
-import axios from 'axios';
 import * as fs from 'node:fs/promises';
 import path from 'path';
 import * as cheerio from 'cheerio';
 import _ from 'lodash';
+import { createRequire } from 'module';
+import debug from 'debug';
+
+const require = createRequire(import.meta.url);
+require('axios-debug-log');
+const axios = require('axios');
+
+const logInfo = debug('page-loader:info');
+const logError = debug('page-loader:error');
 
 const makeFilename = (url, ext) => {
   const newExt = ext || path.extname(url);
@@ -27,7 +35,10 @@ async function loadResources(loadedCheerio, url, outputDir, resourcesDirpath) {
       .map((link) => ({ url: new URL(link, url).href, link }));
     // eslint-disable-next-line no-unused-vars
 
-    const promises1 = tagLinks.map((link) => axios.get(link.url));
+    const promises1 = tagLinks.map((link) => axios.get(link.url).catch((e) => {
+      logError(`There was a network error: ${e.message}`);
+      throw e;
+    }));
     const response = await Promise.allSettled(promises1);
 
     return response.filter((el) => el.status === 'fulfilled')
@@ -57,7 +68,12 @@ async function loadResources(loadedCheerio, url, outputDir, resourcesDirpath) {
  * @param {String} outputDir
  */
 export default async (url, outputDir = process.cwd()) => {
-  const response = await axios.get(url);
+  const response = await axios.get(url).catch((e) => {
+    logError(`There was a network error: ${e.message}`);
+    throw e;
+  });
+  logInfo(`Got html from ${url}`);
+
   const filename = makeFilename(url, '.html');
   const filepath = path.join(outputDir, filename);
 
@@ -67,10 +83,15 @@ export default async (url, outputDir = process.cwd()) => {
 
   const resources = await loadResources($, url, outputDir, resourcesDirpath);
 
+  logInfo(`Got page files: ${resources.map((resource) => resource.filename).join('\n')}`);
   await fs.mkdir(resourcesDirpath);
   const promises = resources
-    .map((res) => fs.writeFile(res.absolutePath, res.data));
+    .map((res) => fs.writeFile(res.absolutePath, res.data).catch((e) => {
+      logError(`Cannot write file to disk: ${e.message}`);
+      throw e;
+    }));
   await Promise.allSettled(promises);
+  logInfo(`Finished writing files to ${resourcesDirpath}`);
 
   const uniqTags = _.uniq(resources.map((el) => el.type));
   uniqTags.forEach((tag) => {
@@ -82,6 +103,11 @@ export default async (url, outputDir = process.cwd()) => {
   });
 
   const newHtml = $.html();
-  await fs.writeFile(filepath, newHtml);
+  await fs.writeFile(filepath, newHtml).catch((e) => {
+    logError(`Cannot write file to disk: ${e.message}`);
+    throw e;
+  });
+  logInfo(`Saved modified .html to ${filepath}`);
+
   return { filepath };
 };

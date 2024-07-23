@@ -10,10 +10,13 @@ import * as fs from 'fs';
 import * as os from 'node:os';
 import nock from 'nock';
 import * as cheerio from 'cheerio';
+import { fileURLToPath } from 'url';
 import pageLoader from '../index.js';
 
 nock.disableNetConnect();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const getFixturePath = (filename) => path.resolve(__dirname, '../__fixtures__/', filename);
 
 let tmpdir;

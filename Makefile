@@ -1,14 +1,14 @@
 install: install-deps
 	npx simple-git-hooks
 
-run:
-	bin/nodejs-package.js 10
+debug:
+	DEBUG=* node bin/page-loader.js
 
 install-deps:
 	npm ci --legacy-peer-deps
 
 test:
-	npm test
+	DEBUG=axios,nock*,page-loader* npm test
 
 test-coverage:
 	npm test -- --coverage --coverageProvider=v8
@@ -20,3 +20,4 @@ publish:
 	npm publish
 
 .PHONY: test
+

@@ -8,13 +8,13 @@ import * as cheerio from 'cheerio';
 import _ from 'lodash';
 import { createRequire } from 'module';
 import debug from 'debug';
+import errorHandler from './errorHandler.js';
 
 const require = createRequire(import.meta.url);
 require('axios-debug-log');
 const axios = require('axios');
 
 const logInfo = debug('page-loader:info');
-const logError = debug('page-loader:error');
 
 const makeFilename = (url, ext) => {
   const newExt = ext || path.extname(url);
@@ -35,10 +35,7 @@ async function loadResources(loadedCheerio, url, outputDir, resourcesDirpath) {
       .map((link) => ({ url: new URL(link, url).href, link }));
     // eslint-disable-next-line no-unused-vars
 
-    const promises1 = tagLinks.map((link) => axios.get(link.url).catch((e) => {
-      logError(`There was a network error: ${e.message}`);
-      throw e;
-    }));
+    const promises1 = tagLinks.map((link) => axios.get(link.url).catch(errorHandler));
     const response = await Promise.allSettled(promises1);
 
     return response.filter((el) => el.status === 'fulfilled')
@@ -68,10 +65,7 @@ async function loadResources(loadedCheerio, url, outputDir, resourcesDirpath) {
  * @param {String} outputDir
  */
 export default async (url, outputDir = process.cwd()) => {
-  const response = await axios.get(url).catch((e) => {
-    logError(`There was a network error: ${e.message}`);
-    throw e;
-  });
+  const response = await axios.get(url).catch(errorHandler);
   logInfo(`Got html from ${url}`);
 
   const filename = makeFilename(url, '.html');
@@ -84,12 +78,9 @@ export default async (url, outputDir = process.cwd()) => {
   const resources = await loadResources($, url, outputDir, resourcesDirpath);
 
   logInfo(`Got page files: ${resources.map((resource) => resource.filename).join('\n')}`);
-  await fs.mkdir(resourcesDirpath);
+  await fs.mkdir(resourcesDirpath).catch(errorHandler);
   const promises = resources
-    .map((res) => fs.writeFile(res.absolutePath, res.data).catch((e) => {
-      logError(`Cannot write file to disk: ${e.message}`);
-      throw e;
-    }));
+    .map((res) => fs.writeFile(res.absolutePath, res.data).catch(errorHandler));
   await Promise.allSettled(promises);
   logInfo(`Finished writing files to ${resourcesDirpath}`);
 
@@ -103,11 +94,8 @@ export default async (url, outputDir = process.cwd()) => {
   });
 
   const newHtml = $.html();
-  await fs.writeFile(filepath, newHtml).catch((e) => {
-    logError(`Cannot write file to disk: ${e.message}`);
-    throw e;
-  });
+  await fs.writeFile(filepath, newHtml).catch(errorHandler);
   logInfo(`Saved modified .html to ${filepath}`);
-
+  console.log(`Page was successfully downloaded into ${outputDir}`);
   return { filepath };
 };

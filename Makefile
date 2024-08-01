@@ -1,5 +1,6 @@
 install: install-deps
 	npx simple-git-hooks
+	npx link
 
 debug:
 	DEBUG=* node bin/page-loader.js
@@ -15,9 +16,6 @@ test-coverage:
 
 lint:
 	npx eslint . --ignore-pattern __fixtures__/**
-
-publish:
-	npm publish
 
 .PHONY: test
 

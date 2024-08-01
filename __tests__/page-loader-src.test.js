@@ -57,6 +57,9 @@ describe('Page loader positive tests', () => {
 });
 describe('Page loader negative tests', () => {
   beforeEach(async () => {
+    nock.restore();
+    nock.cleanAll();
+    nock.activate();
     tmpdir = await fsp.mkdtemp(path.join(os.tmpdir(), 'page-loader-'));
   });
   const errors = {

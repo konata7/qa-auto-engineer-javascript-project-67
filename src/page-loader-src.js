@@ -40,7 +40,7 @@ async function loadResources(loadedCheerio, url, outputDir, resourcesDirpath) {
 
     return response.filter((el) => el.status === 'fulfilled')
       .map((el) => ({
-        data: el.value.data.trim(),
+        data: el.value.data,
         url: el.value.config.url,
         type: tag,
         linkAttr,
@@ -80,7 +80,7 @@ export default async (url, outputDir = process.cwd()) => {
   logInfo(`Got page files: ${resources.map((resource) => resource.filename).join('\n')}`);
   await fs.mkdir(resourcesDirpath).catch(errorHandler);
   const promises = resources
-    .map((res) => fs.writeFile(res.absolutePath, res.data).catch(errorHandler));
+    .map((res) => fs.writeFile(res.absolutePath, res.data, 'utf-8').catch(errorHandler));
   await Promise.allSettled(promises);
   logInfo(`Finished writing files to ${resourcesDirpath}`);
 

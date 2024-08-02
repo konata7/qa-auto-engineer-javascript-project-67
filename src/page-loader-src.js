@@ -40,7 +40,7 @@ async function loadResources(loadedCheerio, url, outputDir, resourcesDirpath) {
 
     return response.filter((el) => el.status === 'fulfilled')
       .map((el) => ({
-        data: el.value.data,
+        data: el.value.data.trim(),
         url: el.value.config.url,
         type: tag,
         linkAttr,
